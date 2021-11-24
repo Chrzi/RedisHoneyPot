@@ -12,15 +12,17 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/walu/resp"
 	"gopkg.in/ini.v1"
+	"os"
 	"strconv"
 	"strings"
 )
 
 type RedisServer struct {
-	server  *gev.Server
-	hashmap *hashmap.Map
-	Config  *ini.File
-	log     *logrus.Logger
+	server   *gev.Server
+	hashmap  *hashmap.Map
+	Config   *ini.File
+	log      *logrus.Logger
+	sensorId string
 }
 
 func NewRedisServer(address string, proto string, loopsnum int) (server *RedisServer, err error) {
@@ -35,6 +37,12 @@ func NewRedisServer(address string, proto string, loopsnum int) (server *RedisSe
 		panic(err)
 	}
 	Serv.Config = config
+	sensorId, ok := os.LookupEnv("SENSOR_ID")
+	if ok {
+		Serv.sensorId = sensorId
+	} else {
+		Serv.sensorId = config.Section("redispot").Key("external_id").Value()
+	}
 	Serv.server, err = gev.NewServer(Serv,
 		gev.Address(address),
 		gev.Network(proto),
@@ -56,8 +64,9 @@ func (s *RedisServer) Stop() {
 
 func (s *RedisServer) OnConnect(c *connection.Connection) {
 	s.log.WithFields(logrus.Fields{
-		"action": "NewConnect",
-		"addr":   c.PeerAddr(),
+		"action":   "NewConnect",
+		"addr":     c.PeerAddr(),
+		"sensorId": s.sensorId,
 	}).Println()
 }
 
@@ -74,8 +83,9 @@ func (s *RedisServer) OnMessage(c *connection.Connection, ctx interface{}, data 
 	com := strings.ToLower(cmd.Name())
 
 	s.log.WithFields(logrus.Fields{
-		"action": strings.Join(cmd.Args, " "),
-		"addr":   c.PeerAddr(),
+		"action":   strings.Join(cmd.Args, " "),
+		"addr":     c.PeerAddr(),
+		"sensorId": s.sensorId,
 	}).Println()
 
 	switch com {
@@ -193,7 +203,8 @@ func (s *RedisServer) OnMessage(c *connection.Connection, ctx interface{}, data 
 
 func (s *RedisServer) OnClose(c *connection.Connection) {
 	s.log.WithFields(logrus.Fields{
-		"action": "Closed",
-		"addr":   c.PeerAddr(),
+		"action":   "Closed",
+		"addr":     c.PeerAddr(),
+		"sensorId": s.sensorId,
 	}).Println()
 }
